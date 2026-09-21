@@ -44,10 +44,27 @@ try:
 except:
     SM90_ENABLED = False
 
-from .quant import per_block_int8 as per_block_int8_cuda
-from .quant import per_warp_int8 as per_warp_int8_cuda
-from .quant import sub_mean
-from .quant import per_channel_fp8
+try:
+    from .quant import per_block_int8 as per_block_int8_cuda
+    from .quant import per_warp_int8 as per_warp_int8_cuda
+    from .quant import sub_mean
+    from .quant import per_channel_fp8
+    CUDA_QUANT_ENABLED = True
+except ImportError:
+    # The fused CUDA quantization extension is not built (e.g. ROCm / AMD GPUs).
+    # Only the Triton kernels are available in that case.
+    CUDA_QUANT_ENABLED = False
+
+    def _cuda_quant_unavailable(*args, **kwargs):
+        raise RuntimeError(
+            "SageAttention CUDA quantization kernels are not available in this build. "
+            "Use the Triton backend (quantization_backend='triton')."
+        )
+
+    per_block_int8_cuda = per_warp_int8_cuda = sub_mean = per_channel_fp8 = _cuda_quant_unavailable
+
+# True when running on AMD GPUs through PyTorch's ROCm/HIP backend.
+IS_ROCM = getattr(torch.version, "hip", None) is not None
 
 from typing import Any, List, Literal, Optional, Tuple, Union
 import warnings
@@ -58,13 +75,14 @@ import re
 
 def get_cuda_version():
     try:
-        output = subprocess.check_output(['nvcc', '--version']).decode()
+        output = subprocess.check_output(['nvcc', '--version'], stderr=subprocess.DEVNULL).decode()
         match = re.search(r'release (\d+)\.(\d+)', output)
         if match:
             major, minor = int(match.group(1)), int(match.group(2))
             return major, minor
     except Exception as e:
-        print("Failed to get CUDA version:", e)
+        if not IS_ROCM:
+            print("Failed to get CUDA version:", e)
     return None, None
 
 
@@ -138,8 +156,14 @@ def sageattn(
     - ``num_qo_heads`` must be divisible by ``num_kv_heads``.
     - The tensors `q`, `k`, and `v` must have the dtype ``torch.float16`` or ``torch.bfloat16``
     - All tensors must be on the same cuda device.
+    - On AMD GPUs (ROCm), the Triton kernel is always used. Extra keyword arguments
+      such as ``attn_mask`` and ``smooth_k`` are forwarded to it.
     """
-        
+
+    if IS_ROCM:
+        # AMD GPUs have no support for the CUDA (PTX) kernels; use the portable Triton kernel.
+        return sageattn_qk_int8_pv_fp16_triton(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, **kwargs)
+
     arch = get_cuda_arch_versions()[q.device.index]
     if arch == "sm80":
         return sageattn_qk_int8_pv_fp16_cuda(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32")

@@ -18,6 +18,8 @@ import torch, math
 import triton
 import triton.language as tl
 
+from ._launch import launch_params
+
 @triton.jit
 def _attn_fwd_inner(acc, l_i, m_i, q, q_scale, kv_len,
                     K_ptrs, K_scale_ptr, V_ptrs, stride_kn, stride_vn, 
@@ -158,6 +160,7 @@ def forward(q, k, v, q_scale, k_scale, tensor_layout="HND", output_dtype=torch.f
         lse = torch.empty([0], dtype=torch.float32, device='cpu')
 
     grid = (triton.cdiv(qo_len, BLOCK_M), h_qo, b   )
+    num_warps, num_stages = launch_params(head_dim, 4 if head_dim == 64 else 8, 4)
     _attn_fwd[grid](
         q, k, v, q_scale, k_scale, o, lse,
         stride_bz_q, stride_h_q, stride_seq_q, 
@@ -169,7 +172,7 @@ def forward(q, k, v, q_scale, k_scale, tensor_layout="HND", output_dtype=torch.f
         BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N, HEAD_DIM=HEAD_DIM_K,  
         STAGE=stage,  
         RETURN_LSE=return_lse,
-        num_warps=4 if head_dim == 64 else 8,
-        num_stages=4)
+        num_warps=num_warps,
+        num_stages=num_stages)
 
     return o, lse

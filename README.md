@@ -1,4 +1,6 @@
 # SageAttention
+
+> **AMD GPUs (ROCm) and ComfyUI:** this fork runs SageAttention and FlashAttention on AMD Radeon cards. See [ROCM.md](./ROCM.md) for the one-command install.
 <!-- We are continuously updating more features. You could **Star** and **Watch** our repository to stay updated.
 
 --- -->

@@ -29,6 +29,16 @@ SKIP_CUDA_BUILD = (
     or ("sdist" in sys.argv)
 )
 
+# On ROCm (AMD GPUs) the CUDA kernels cannot be built; only the Triton kernels are used.
+if not SKIP_CUDA_BUILD:
+    try:
+        import torch
+        if getattr(torch.version, "hip", None) is not None:
+            print("ROCm build of PyTorch detected: skipping CUDA extensions, using Triton kernels only.")
+            SKIP_CUDA_BUILD = True
+    except ImportError:
+        pass
+
 ext_modules = []
 cmdclass = {}
 
