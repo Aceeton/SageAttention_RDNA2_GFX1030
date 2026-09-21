@@ -6,10 +6,12 @@ This fork makes SageAttention work on AMD Radeon GPUs under Linux with ROCm. It 
 
 | Feature | Status on AMD |
 |---|---|
-| SageAttention2, Triton kernel (INT8 QK, FP16 PV) | Works |
+| SageAttention Triton kernel (INT8 QK, FP16 PV) | Works, with fp16, bf16 and fp32 inputs |
 | FlashAttention 2, Triton AMD backend | Works |
 | SageAttention2 CUDA kernels | Not possible. They use NVIDIA-only PTX instructions. |
 | SageAttention3 | Not possible. It needs FP4 tensor cores that only NVIDIA Blackwell GPUs have. |
+
+The Triton kernel ships in the SageAttention2 package, but algorithmically it is close to the original SageAttention. SageAttention2's finer-grained INT8 quantization and FP8 PV only exist in the CUDA kernels, which need NVIDIA GPUs.
 
 On RDNA2, PyTorch has no fast attention kernel. It falls back to a slow kernel that uses a lot of memory. Both SageAttention and FlashAttention are faster, and they run sequence lengths that make PyTorch run out of memory.
 
@@ -103,6 +105,7 @@ SAGEATTN_NUM_WARPS=8 SAGEATTN_NUM_STAGES=2 python bench/test_rocm.py --skip-accu
 ## What changed compared to upstream SageAttention
 
 - The package imports without the compiled CUDA extensions, and `sageattn()` always uses the Triton kernel on ROCm.
+- The Triton kernel accepts fp32 inputs. On RDNA2, ComfyUI runs models without fp16 support in fp32, because it avoids bf16 on these cards. Upstream rejected those calls, and ComfyUI silently fell back to PyTorch attention.
 - The Triton launch settings on ROCm are 8 warps and 2 pipeline stages. The NVIDIA settings were 2 to 4 times slower on RDNA2. The settings are in `sageattention/triton/_launch.py`.
 - `setup.py` skips the CUDA extensions automatically when PyTorch is a ROCm build.
 - The FlashAttention patch sets the same tuned block configuration on RDNA2. It also fixes a crash when autotuning is enabled on non-CDNA GPUs.

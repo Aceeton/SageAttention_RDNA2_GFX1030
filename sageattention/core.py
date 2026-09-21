@@ -265,7 +265,9 @@ def sageattn_qk_int8_pv_fp16_triton(
 
     dtype = q.dtype
     assert q.is_cuda, "Input tensors must be on cuda."
-    assert dtype in [torch.float16, torch.bfloat16], "Input tensors must be in dtype of torch.float16 or torch.bfloat16"
+    # float32 is accepted: Q and K are quantized to INT8 with fp32 math and V is cast to fp16,
+    # so fp32 inputs (e.g. models run in fp32 on GPUs without fast bf16) need no extra handling.
+    assert dtype in [torch.float16, torch.bfloat16, torch.float32], "Input tensors must be in dtype of torch.float16, torch.bfloat16 or torch.float32"
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 
@@ -422,7 +424,9 @@ def sageattn_varlen(
     
     dtype = q.dtype
     assert q.is_cuda, "Input tensors must be on cuda."
-    assert dtype in [torch.float16, torch.bfloat16], "Input tensors must be in dtype of torch.float16 or torch.bfloat16"
+    # float32 is accepted: Q and K are quantized to INT8 with fp32 math and V is cast to fp16,
+    # so fp32 inputs (e.g. models run in fp32 on GPUs without fast bf16) need no extra handling.
+    assert dtype in [torch.float16, torch.bfloat16, torch.float32], "Input tensors must be in dtype of torch.float16, torch.bfloat16 or torch.float32"
     assert q.device == k.device == v.device, "All tensors must be on the same device."
     assert q.dtype == k.dtype == v.dtype, "All tensors must have the same dtype."
 

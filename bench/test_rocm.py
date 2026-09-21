@@ -66,7 +66,7 @@ def accuracy(args):
     seqs = [1024] if args.quick else [1024, 4096]
     failures = 0
     for dtype, d, layout, causal, s in itertools.product(
-            [torch.float16, torch.bfloat16], [64, 128], ["HND", "NHD"], [False, True], seqs):
+            [torch.float16, torch.bfloat16, torch.float32], [64, 128], ["HND", "NHD"], [False, True], seqs):
         q, k, v = make_qkv(1, 8, s, d, dtype, layout)
         ref = reference(q, k, v, layout, causal)
         o = sageattn(q, k, v, tensor_layout=layout, is_causal=causal)
@@ -74,7 +74,7 @@ def accuracy(args):
         ok = cos > 0.99
         failures += not ok
         line = f"sage  {str(dtype):15s} d={d:3d} {layout} causal={causal!s:5s} s={s:5d}  cos={cos:.5f} maxerr={err:.4f}"
-        if args.flash and layout == "NHD":
+        if args.flash and layout == "NHD" and dtype != torch.float32:  # flash_attn has no fp32 support
             of = flash_fn()(q, k, v, causal=causal)
             fcos, ferr = compare(of, ref)
             failures += not fcos > 0.99
